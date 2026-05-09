@@ -15,7 +15,12 @@ fun quoted(value: String): String {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
 
-val redirectScheme = configValue("APP_AUTH_REDIRECT_SCHEME", "com.kptgames.vocabuildary")
+val mobileRedirectScheme = configValue("VOCABUILDARY_MOBILE_REDIRECT_SCHEME", "com.kptgames.vocabuildary")
+val mobileRedirectHost = configValue("VOCABUILDARY_MOBILE_REDIRECT_HOST", "auth")
+val mobileRedirectUri = configValue(
+    "VOCABUILDARY_MOBILE_REDIRECT_URI",
+    "$mobileRedirectScheme://$mobileRedirectHost"
+)
 
 android {
     namespace = "com.kptgames.vocabuildary"
@@ -30,7 +35,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        manifestPlaceholders["appAuthRedirectScheme"] = redirectScheme
+        manifestPlaceholders["gatewayAuthRedirectScheme"] = mobileRedirectScheme
+        manifestPlaceholders["gatewayAuthRedirectHost"] = mobileRedirectHost
+        manifestPlaceholders["appAuthRedirectScheme"] = mobileRedirectScheme
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
         buildConfigField(
             "String",
             "VOCABUILDARY_API_BASE_URL",
@@ -43,27 +51,29 @@ android {
         )
         buildConfigField(
             "String",
-            "OIDC_ISSUER",
-            quoted(configValue("OIDC_ISSUER", "https://auth.example.com/application/o/vocabuildary/"))
+            "VOCABUILDARY_AUTH_MODE",
+            quoted(configValue("VOCABUILDARY_AUTH_MODE", "gateway-token"))
         )
         buildConfigField(
             "String",
-            "OIDC_CLIENT_ID",
-            quoted(configValue("OIDC_CLIENT_ID", "vocabuildary-android"))
+            "VOCABUILDARY_MOBILE_AUTH_PATH",
+            quoted(configValue("VOCABUILDARY_MOBILE_AUTH_PATH", "mobile/auth/start"))
         )
         buildConfigField(
             "String",
-            "OIDC_REDIRECT_URI",
-            quoted(configValue("OIDC_REDIRECT_URI", "$redirectScheme:/oauth2redirect"))
+            "VOCABUILDARY_MOBILE_REDIRECT_URI",
+            quoted(mobileRedirectUri)
         )
-        buildConfigField(
-            "String",
-            "OIDC_SCOPES",
-            quoted(configValue("OIDC_SCOPES", "openid profile email offline_access"))
-        )
+        buildConfigField("String", "OIDC_CLIENT_ID", quoted(configValue("OIDC_CLIENT_ID", "")))
+        buildConfigField("String", "OIDC_REDIRECT_URI", quoted(configValue("OIDC_REDIRECT_URI", mobileRedirectUri)))
+        buildConfigField("String", "OIDC_SCOPES", quoted(configValue("OIDC_SCOPES", "openid profile email")))
+        buildConfigField("String", "OIDC_ISSUER", quoted(configValue("OIDC_ISSUER", "")))
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -100,10 +110,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("net.openid:appauth:0.11.1")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.appauth)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

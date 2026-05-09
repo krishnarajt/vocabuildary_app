@@ -25,7 +25,7 @@ import com.kptgames.vocabuildary.R
 import com.kptgames.vocabuildary.data.ApiFactory
 import com.kptgames.vocabuildary.data.AppPreferences
 import com.kptgames.vocabuildary.data.MobileNotificationItem
-import com.kptgames.vocabuildary.data.OidcAuthManager
+import com.kptgames.vocabuildary.data.GatewayAuthManager
 import com.kptgames.vocabuildary.data.ReminderSlot
 import com.kptgames.vocabuildary.data.VocabuildaryRepository
 import kotlinx.coroutines.runBlocking
@@ -98,7 +98,7 @@ class MobileNotificationWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val preferences = AppPreferences(applicationContext)
-        val authManager = OidcAuthManager(applicationContext, preferences)
+        val authManager = GatewayAuthManager(preferences)
         authManager.load()
         if (!authManager.isAuthorized()) return Result.success()
 

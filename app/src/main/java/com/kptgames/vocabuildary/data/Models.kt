@@ -46,6 +46,7 @@ data class MobileSummary(
 data class LearningSettings(
     val enabled: Boolean = true,
     @SerializedName("target_language_code") val targetLanguageCode: String = "en",
+    @SerializedName("target_language_codes") val targetLanguageCodes: List<String> = listOf("en"),
     @SerializedName("daily_review_words") val dailyReviewWords: Int = 3,
     @SerializedName("daily_cloze_words") val dailyClozeWords: Int = 1,
     @SerializedName("mastery_encounters") val masteryEncounters: Int = 8,
@@ -257,11 +258,21 @@ data class SkillLevel(
 data class LanguageSkill(
     val language: LanguageItem = LanguageItem(),
     val level: UserLanguageLevel? = null,
+    @SerializedName("frequency_band") val frequencyBand: FrequencyBand? = null,
+    @SerializedName("frequency_bands") val frequencyBands: List<FrequencyBand> = emptyList(),
     @SerializedName("quiz_available") val quizAvailable: Boolean = false,
     @SerializedName("quiz_id") val quizId: Int? = null
 )
 
+data class FrequencyBand(
+    @SerializedName("language_code") val languageCode: String = "",
+    @SerializedName("level_code") val levelCode: String = "",
+    @SerializedName("min_frequency_rank") val minFrequencyRank: Int? = null,
+    @SerializedName("max_frequency_rank") val maxFrequencyRank: Int? = null
+)
+
 data class UserLanguageLevel(
+    @SerializedName("language_code") val languageCode: String = "",
     @SerializedName("level_code") val levelCode: String = "",
     val source: String = "",
     @SerializedName("quiz_score") val quizScore: Int? = null,

@@ -16,22 +16,24 @@ private val Context.vocabuildaryDataStore: DataStore<Preferences> by preferences
 class AppPreferences(private val context: Context) {
     companion object {
         private val AUTH_STATE_KEY = stringPreferencesKey("auth_state_json")
+        private val AUTH_TOKEN_KEY = stringPreferencesKey("gateway_auth_token")
         private val DEVICE_ID_KEY = stringPreferencesKey("device_id")
         private val REMINDER_SLOTS_KEY = stringPreferencesKey("reminder_slots_json")
     }
 
-    suspend fun getAuthStateJson(): String? {
-        return context.vocabuildaryDataStore.data.first()[AUTH_STATE_KEY]
+    suspend fun getGatewayAuthToken(): String? {
+        return context.vocabuildaryDataStore.data.first()[AUTH_TOKEN_KEY]
     }
 
-    suspend fun saveAuthStateJson(value: String) {
+    suspend fun saveGatewayAuthToken(value: String) {
         context.vocabuildaryDataStore.edit { preferences ->
-            preferences[AUTH_STATE_KEY] = value
+            preferences[AUTH_TOKEN_KEY] = value
         }
     }
 
-    suspend fun clearAuthState() {
+    suspend fun clearGatewayAuthToken() {
         context.vocabuildaryDataStore.edit { preferences ->
+            preferences.remove(AUTH_TOKEN_KEY)
             preferences.remove(AUTH_STATE_KEY)
         }
     }
@@ -54,5 +56,21 @@ class AppPreferences(private val context: Context) {
 
     suspend fun getReminderSlotsJson(): String? {
         return context.vocabuildaryDataStore.data.first()[REMINDER_SLOTS_KEY]
+    }
+
+    suspend fun getAuthStateJson(): String? {
+        return context.vocabuildaryDataStore.data.first()[AUTH_STATE_KEY]
+    }
+
+    suspend fun saveAuthStateJson(value: String) {
+        context.vocabuildaryDataStore.edit { preferences ->
+            preferences[AUTH_STATE_KEY] = value
+        }
+    }
+
+    suspend fun clearAuthState() {
+        context.vocabuildaryDataStore.edit { preferences ->
+            preferences.remove(AUTH_STATE_KEY)
+        }
     }
 }

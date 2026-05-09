@@ -22,7 +22,7 @@ data class SettingsForm(
     val telegramChatId: String = "",
     val appriseUrls: String = "",
     val learningEnabled: Boolean = true,
-    val targetLanguageCode: String = "en",
+    val targetLanguageCodes: String = "en",
     val dailyReviewWords: String = "3",
     val dailyClozeWords: String = "1",
     val masteryEncounters: String = "8",
@@ -53,6 +53,7 @@ data class BookWordsSheet(
 
 data class VocabuildaryUiState(
     val authChecked: Boolean = false,
+    val authRequired: Boolean = true,
     val isLoggedIn: Boolean = false,
     val loading: Boolean = false,
     val saving: Boolean = false,
@@ -85,7 +86,7 @@ data class VocabuildaryUiState(
 
 class VocabuildaryViewModel(
     application: Application,
-    private val authManager: OidcAuthManager,
+    private val authManager: GatewayAuthManager,
     private val repository: VocabuildaryRepository
 ) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(VocabuildaryUiState())
@@ -93,12 +94,22 @@ class VocabuildaryViewModel(
 
     init {
         viewModelScope.launch {
+            val authRequired = authManager.isAuthRequired()
             authManager.load()
             if (authManager.isAuthorized()) {
-                _state.value = _state.value.copy(isLoggedIn = true, authChecked = true)
+                _state.value = _state.value.copy(
+                    authRequired = authRequired,
+                    isLoggedIn = true,
+                    authChecked = true,
+                    status = if (authRequired) "Signed in" else "Local dev session"
+                )
                 refreshAll()
             } else {
-                _state.value = _state.value.copy(authChecked = true, status = "Sign in required")
+                _state.value = _state.value.copy(
+                    authRequired = authRequired,
+                    authChecked = true,
+                    status = "Sign in required"
+                )
             }
         }
     }
@@ -128,6 +139,7 @@ class VocabuildaryViewModel(
                 repository.registerDevice()
                 val snapshot = repository.loadDashboard()
                 val selectedLanguage = snapshot.languageSkills.items.firstOrNull()?.language?.code
+                    ?: snapshot.profile.learning.targetLanguageCodes.firstOrNull()
                     ?: snapshot.profile.learning.targetLanguageCode
                 _state.value = _state.value.copy(
                     loading = false,
@@ -162,8 +174,20 @@ class VocabuildaryViewModel(
 
     fun logout() {
         viewModelScope.launch {
+            if (authManager.isAuthRequired()) {
+                runCatching { repository.revokeMobileAuth() }
+            }
             authManager.logout()
-            _state.value = VocabuildaryUiState(authChecked = true, status = "Signed out")
+            if (authManager.isAuthRequired()) {
+                _state.value = VocabuildaryUiState(
+                    authChecked = true,
+                    authRequired = true,
+                    status = "Signed out"
+                )
+            } else {
+                _state.value = _state.value.copy(status = "Local dev session")
+                refreshAll()
+            }
         }
     }
 
@@ -172,7 +196,13 @@ class VocabuildaryViewModel(
     }
 
     fun saveSettings() {
-        val form = _state.value.settingsForm
+        val currentState = _state.value
+        val form = currentState.settingsForm
+        val languageCodes = parseLanguageCodes(form.targetLanguageCodes)
+        val languageLevels = currentState.skills.items.mapNotNull { skill ->
+            val levelCode = skill.level?.levelCode
+            if (levelCode.isNullOrBlank()) null else skill.language.code to levelCode
+        }.toMap()
         viewModelScope.launch {
             _state.value = _state.value.copy(saving = true, status = "Saving settings")
             try {
@@ -181,7 +211,9 @@ class VocabuildaryViewModel(
                     "telegram_chat_id" to form.telegramChatId.trim(),
                     "learning" to mapOf(
                         "enabled" to form.learningEnabled,
-                        "target_language_code" to form.targetLanguageCode.trim().lowercase(),
+                        "target_language_code" to (languageCodes.firstOrNull() ?: "en"),
+                        "target_language_codes" to languageCodes,
+                        "language_levels" to languageLevels,
                         "daily_review_words" to form.dailyReviewWords.trim(),
                         "daily_cloze_words" to form.dailyClozeWords.trim(),
                         "mastery_encounters" to form.masteryEncounters.trim(),
@@ -495,7 +527,9 @@ class VocabuildaryViewModel(
             provider = profile.notifications.provider,
             telegramChatId = profile.telegram.chatId,
             learningEnabled = learning.enabled,
-            targetLanguageCode = learning.targetLanguageCode,
+            targetLanguageCodes = learning.targetLanguageCodes.ifEmpty {
+                listOf(learning.targetLanguageCode)
+            }.joinToString(","),
             dailyReviewWords = learning.dailyReviewWords.toString(),
             dailyClozeWords = learning.dailyClozeWords.toString(),
             masteryEncounters = learning.masteryEncounters.toString(),
@@ -511,9 +545,18 @@ class VocabuildaryViewModel(
     }
 }
 
+private fun parseLanguageCodes(value: String): List<String> {
+    return value.split(",", ";")
+        .map { it.trim().lowercase() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .take(12)
+        .ifEmpty { listOf("en") }
+}
+
 class VocabuildaryViewModelFactory(
     private val application: Application,
-    private val authManager: OidcAuthManager,
+    private val authManager: GatewayAuthManager,
     private val repository: VocabuildaryRepository
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")

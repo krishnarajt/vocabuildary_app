@@ -14,7 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kptgames.vocabuildary.data.ApiFactory
 import com.kptgames.vocabuildary.data.AppPreferences
-import com.kptgames.vocabuildary.data.OidcAuthManager
+import com.kptgames.vocabuildary.data.GatewayAuthManager
 import com.kptgames.vocabuildary.data.VocabuildaryRepository
 import com.kptgames.vocabuildary.notifications.NativeNotificationHelper
 import com.kptgames.vocabuildary.ui.VocabuildaryRoot
@@ -23,7 +23,7 @@ import com.kptgames.vocabuildary.ui.VocabuildaryViewModelFactory
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private lateinit var authManager: OidcAuthManager
+    private lateinit var authManager: GatewayAuthManager
     private var appViewModel: VocabuildaryViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
         NativeNotificationHelper.ensureChannel(this)
 
         val preferences = AppPreferences(applicationContext)
-        authManager = OidcAuthManager(applicationContext, preferences)
+        authManager = GatewayAuthManager(preferences)
         val (api, client) = ApiFactory.create(authManager)
         val repository = VocabuildaryRepository(api, client, preferences)
 
@@ -76,8 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun handleAuthIntent(intent: Intent?) {
-        if (intent?.action != ACTION_AUTH_COMPLETE) return
-        val result = authManager.handleAuthorizationIntent(intent)
+        val result = authManager.handleAuthorizationIntent(intent) ?: return
         appViewModel?.handleAuthResult(result)
         setIntent(Intent(this, MainActivity::class.java))
     }

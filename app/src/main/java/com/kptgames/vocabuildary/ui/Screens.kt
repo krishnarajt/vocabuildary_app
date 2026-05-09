@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
@@ -40,9 +40,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -72,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kptgames.vocabuildary.data.BookItem
 import com.kptgames.vocabuildary.data.BookUploadDraft
+import com.kptgames.vocabuildary.data.FrequencyBand
 import com.kptgames.vocabuildary.data.LanguageSkill
 import com.kptgames.vocabuildary.data.ReminderSlot
 import com.kptgames.vocabuildary.data.WordItem
@@ -126,7 +128,7 @@ private fun LoginScreen(status: String, error: String?, onLogin: () -> Unit) {
         Text("Daily vocabulary, now with native Android reminders.")
         Spacer(Modifier.height(24.dp))
         Button(onClick = onLogin, modifier = Modifier.fillMaxWidth()) {
-            Text("Sign in with Authentik")
+            Text("Sign in through API gateway")
         }
         Spacer(Modifier.height(12.dp))
         Text(status, color = MaterialTheme.colorScheme.primary)
@@ -223,12 +225,20 @@ private fun DashboardScreen(state: VocabuildaryUiState, viewModel: VocabuildaryV
 @Composable
 private fun StatusStrip(state: VocabuildaryUiState) {
     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+    val languageCodes = state.profile?.learning?.targetLanguageCodes.orEmpty()
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AssistChip(onClick = {}, label = { Text(state.status) })
+        if (languageCodes.isNotEmpty()) {
+            AssistChip(
+                onClick = {},
+                label = { Text(languageCodes.joinToString(" / ") { it.uppercase() }) },
+                leadingIcon = { Icon(Icons.Filled.School, contentDescription = null) }
+            )
+        }
         AssistChip(
             onClick = {},
             label = {
-                Text(if (state.profile?.notifications?.configured == true) "Delivery ready" else "Delivery needs setup")
+                Text(if (state.profile?.notifications?.configured == true) "Reminders ready" else "Reminders need setup")
             },
             leadingIcon = { Icon(Icons.Filled.Notifications, contentDescription = null) }
         )
@@ -242,10 +252,33 @@ private fun StatusStrip(state: VocabuildaryUiState) {
 private fun TodayPanel(state: VocabuildaryUiState, viewModel: VocabuildaryViewModel) {
     SectionCard(title = "Today") {
         val word = state.learningPlan?.newWord
-        Text(word?.word ?: "Waiting for a learning plan", style = MaterialTheme.typography.headlineMedium)
-        if (word != null) {
-            Text(word.meaning)
-            if (word.example.isNotBlank()) Text("\"${word.example}\"", style = MaterialTheme.typography.bodyMedium)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    word?.word ?: "Waiting for a learning plan",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                if (word != null) {
+                    Text(word.meaning, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    if (word.example.isNotBlank()) {
+                        Text(
+                            "\"${word.example}\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(onClick = {}, label = { Text(word.languageCode.uppercase()) })
+                        word.frequencyRank?.let { AssistChip(onClick = {}, label = { Text("rank $it") }) }
+                        word.zipfFrequency?.let { AssistChip(onClick = {}, label = { Text("zipf ${"%.2f".format(it)}") }) }
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -273,7 +306,7 @@ private fun ReminderSlotsPanel(state: VocabuildaryUiState, viewModel: Vocabuilda
                 onChange = { viewModel.updateReminderSlot(index, it) },
                 onRemove = { viewModel.removeReminderSlot(index) }
             )
-            Divider()
+            HorizontalDivider()
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { viewModel.addReminderSlot() }) { Text("Add Slot") }
@@ -418,13 +451,13 @@ private fun CatalogPanel(state: VocabuildaryUiState, viewModel: VocabuildaryView
         Button(onClick = { viewModel.searchCatalog() }) { Text("Search Words") }
         Text("${state.catalog.total} words")
         state.catalog.items.take(20).forEach { WordRow(it) }
-        Divider()
+        HorizontalDivider()
         Text("Languages", fontWeight = FontWeight.SemiBold)
         state.languages.forEach {
             CompactRow(title = "${it.name} (${it.code})", subtitle = "${it.wordCount} words · ${it.bookCount} books")
         }
         LanguageFormPanel(state, viewModel)
-        Divider()
+        HorizontalDivider()
         Text("Imports", fontWeight = FontWeight.SemiBold)
         Text("Words: ${state.imports.stats?.wordCount ?: 0} · frequency rows: ${state.imports.stats?.frequencyCount ?: 0}")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -479,7 +512,7 @@ private fun SkillsPanel(state: VocabuildaryUiState, viewModel: VocabuildaryViewM
 @Composable
 private fun SkillDetail(skill: LanguageSkill, state: VocabuildaryUiState, viewModel: VocabuildaryViewModel) {
     Text(skill.language.name, style = MaterialTheme.typography.titleMedium)
-    Text("Current level: ${skill.level?.levelCode ?: "not set"}")
+    Text("Current level: ${skill.level?.levelCode ?: "not set"} · ${bandLabel(skill.frequencyBand)}")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         state.skills.levels.forEach { level ->
             FilterChip(
@@ -599,6 +632,7 @@ private fun BookRow(book: BookItem, viewModel: VocabuildaryViewModel) {
 private fun SettingsPanel(state: VocabuildaryUiState, viewModel: VocabuildaryViewModel) {
     SectionCard(title = "Settings") {
         val form = state.settingsForm
+        val selectedCodes = selectedLanguageCodes(form.targetLanguageCodes)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = form.provider == "telegram",
@@ -630,7 +664,7 @@ private fun SettingsPanel(state: VocabuildaryUiState, viewModel: VocabuildaryVie
             minLines = 2,
             modifier = Modifier.fillMaxWidth()
         )
-        Divider()
+        HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(
                 checked = form.learningEnabled,
@@ -638,15 +672,36 @@ private fun SettingsPanel(state: VocabuildaryUiState, viewModel: VocabuildaryVie
             )
             Text("Learning enabled")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmallField("Lang", form.targetLanguageCode, Modifier.width(88.dp)) {
-                viewModel.updateSettingsForm { form -> form.copy(targetLanguageCode = it) }
+        Text("Reminder languages", fontWeight = FontWeight.SemiBold)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.languages.forEach { language ->
+                FilterChip(
+                    selected = selectedCodes.contains(language.code),
+                    onClick = {
+                        viewModel.updateSettingsForm {
+                            it.copy(targetLanguageCodes = toggleLanguageCode(it.targetLanguageCodes, language.code))
+                        }
+                    },
+                    label = { Text("${language.code.uppercase()} · ${language.name}") }
+                )
             }
+        }
+        OutlinedTextField(
+            value = form.targetLanguageCodes,
+            onValueChange = { value -> viewModel.updateSettingsForm { it.copy(targetLanguageCodes = value) } },
+            label = { Text("Language codes") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        LearningBandsEditor(selectedCodes, state, viewModel)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmallField("Review", form.dailyReviewWords, Modifier.weight(1f)) {
-                viewModel.updateSettingsForm { form -> form.copy(dailyReviewWords = it) }
+                viewModel.updateSettingsForm { settings -> settings.copy(dailyReviewWords = it) }
             }
             SmallField("Blank", form.dailyClozeWords, Modifier.weight(1f)) {
-                viewModel.updateSettingsForm { form -> form.copy(dailyClozeWords = it) }
+                viewModel.updateSettingsForm { settings -> settings.copy(dailyClozeWords = it) }
+            }
+            SmallField("Mastery", form.masteryEncounters, Modifier.weight(1f)) {
+                viewModel.updateSettingsForm { settings -> settings.copy(masteryEncounters = it) }
             }
         }
         OutlinedTextField(
@@ -657,7 +712,49 @@ private fun SettingsPanel(state: VocabuildaryUiState, viewModel: VocabuildaryVie
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { viewModel.saveSettings() }) { Text("Save Settings") }
-            TextButton(onClick = { viewModel.logout() }) { Text("Sign Out") }
+            if (state.authRequired) {
+                TextButton(onClick = { viewModel.logout() }) { Text("Sign Out") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LearningBandsEditor(
+    selectedCodes: Set<String>,
+    state: VocabuildaryUiState,
+    viewModel: VocabuildaryViewModel
+) {
+    if (selectedCodes.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        selectedCodes.forEach { languageCode ->
+            val skill = state.skills.items.firstOrNull { it.language.code == languageCode }
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        skill?.language?.name ?: languageCode.uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Current level ${skill?.level?.levelCode ?: "not set"} · ${bandLabel(skill?.frequencyBand)}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.skills.levels.forEach { level ->
+                            val band = skill?.frequencyBands?.firstOrNull { it.levelCode == level.code }
+                            FilterChip(
+                                selected = skill?.level?.levelCode == level.code,
+                                onClick = { viewModel.saveSkillLevel(languageCode, level.code) },
+                                label = { Text("${level.code} ${bandRangeLabel(band)}") }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -666,12 +763,19 @@ private fun SettingsPanel(state: VocabuildaryUiState, viewModel: VocabuildaryVie
 private fun IdentityPanel(state: VocabuildaryUiState, viewModel: VocabuildaryViewModel) {
     SectionCard(title = "Identity and Mobile") {
         val profile = state.profile
-        Text(profile?.email ?: profile?.gatewaySub ?: "Signed in")
+        Text(
+            if (state.authRequired) {
+                profile?.email ?: profile?.gatewaySub ?: "Signed in"
+            } else {
+                "Local development profile"
+            },
+            fontWeight = FontWeight.SemiBold
+        )
         Text("Native devices: ${profile?.mobile?.enabledDeviceCount ?: 0}")
         Text("Provider ready: ${profile?.notifications?.providerConfigured == true}")
         Text("Mobile ready: ${profile?.mobile?.configured == true}")
         Button(onClick = { viewModel.refreshAll() }) {
-            Icon(Icons.Filled.LibraryBooks, contentDescription = null)
+            Icon(Icons.Filled.Refresh, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Re-register Device")
         }
@@ -682,10 +786,11 @@ private fun IdentityPanel(state: VocabuildaryUiState, viewModel: VocabuildaryVie
 }
 
 @Composable
-private fun SectionCard(title: String, content: @Composable Column.() -> Unit) {
-    Card(
+private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -737,6 +842,34 @@ private fun SmallField(
         label = { Text(label) },
         modifier = modifier
     )
+}
+
+private fun selectedLanguageCodes(value: String): Set<String> {
+    return value.split(",", ";")
+        .map { it.trim().lowercase() }
+        .filter { it.isNotBlank() }
+        .toSet()
+}
+
+private fun toggleLanguageCode(value: String, code: String): String {
+    val codes = selectedLanguageCodes(value).toMutableSet()
+    if (!codes.add(code)) codes.remove(code)
+    return codes.ifEmpty { setOf(code) }.joinToString(",")
+}
+
+private fun bandLabel(band: FrequencyBand?): String {
+    return bandRangeLabel(band).ifBlank { "all ranked words" }
+}
+
+private fun bandRangeLabel(band: FrequencyBand?): String {
+    val min = band?.minFrequencyRank
+    val max = band?.maxFrequencyRank
+    return when {
+        min != null && max != null -> "$min-$max"
+        min != null -> "$min+"
+        max != null -> "1-$max"
+        else -> ""
+    }
 }
 
 private data class PickedFileMeta(

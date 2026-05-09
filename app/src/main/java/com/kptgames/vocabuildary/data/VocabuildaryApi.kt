@@ -26,6 +26,7 @@ import retrofit2.http.Query
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
+@JvmSuppressWildcards
 interface VocabuildaryApi {
     @GET("me")
     suspend fun getProfile(): Response<ProfileResponse>
@@ -163,16 +164,19 @@ interface VocabuildaryApi {
     suspend fun markMobileNotificationDelivered(
         @Path("notificationId") notificationId: Int
     ): Response<Map<String, Any>>
+
+    @POST("mobile/auth/logout")
+    suspend fun logoutMobileAuth(): Response<Map<String, Any>>
 }
 
 object ApiFactory {
-    fun create(authManager: OidcAuthManager): Pair<VocabuildaryApi, OkHttpClient> {
+    fun create(authManager: GatewayAuthManager): Pair<VocabuildaryApi, OkHttpClient> {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
         val client = OkHttpClient.Builder()
             .addInterceptor { chain ->
-                val token = runBlocking { authManager.freshAccessToken() }
+                val token = runBlocking { authManager.accessToken() }
                 val requestBuilder = chain.request().newBuilder()
                 if (!token.isNullOrBlank()) {
                     requestBuilder.header("Authorization", "Bearer $token")
@@ -271,6 +275,10 @@ class VocabuildaryRepository(
 
     suspend fun markMobileNotificationDelivered(notificationId: Int) {
         api.markMobileNotificationDelivered(notificationId).unwrap()
+    }
+
+    suspend fun revokeMobileAuth() {
+        api.logoutMobileAuth().unwrap()
     }
 
     suspend fun updateSettings(payload: Map<String, Any?>): UserProfile {
